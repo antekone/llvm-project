@@ -42,6 +42,7 @@ class LLDB_API SBCommandInterpreter;
 class LLDB_API SBCommandInterpreterRunOptions;
 class LLDB_API SBCommandInterpreterRunResult;
 class LLDB_API SBCommandPluginInterface;
+class LLDB_API SBCommandPluginInterfaceWithContext;
 class LLDB_API SBCommandReturnObject;
 class LLDB_API SBCommunication;
 class LLDB_API SBCompileUnit;

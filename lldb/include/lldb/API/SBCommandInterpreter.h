@@ -13,6 +13,7 @@
 
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBDefines.h"
+#include "lldb/API/SBExecutionContext.h"
 
 namespace lldb {
 
@@ -86,6 +87,10 @@ public:
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
   lldb::SBCommand AddCommand(const char *name,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
+                             const char *help);
+
+  lldb::SBCommand AddCommand(const char *name,
                              lldb::SBCommandPluginInterface *impl,
                              const char *help);
 
@@ -112,6 +117,10 @@ public:
   ///
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
+  lldb::SBCommand AddCommand(const char *name,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
+                             const char *help, const char *syntax);
+
   lldb::SBCommand AddCommand(const char *name,
                              lldb::SBCommandPluginInterface *impl,
                              const char *help, const char *syntax);
@@ -143,9 +152,14 @@ public:
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
   lldb::SBCommand AddCommand(const char *name,
-                             lldb::SBCommandPluginInterface *impl,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
                              const char *help, const char *syntax,
                              const char *auto_repeat_command);
+
+  lldb::SBCommand AddCommand(const char *name,
+      lldb::SBCommandPluginInterface *impl,
+      const char *help, const char *syntax,
+      const char *auto_repeat_command);
 
   void SourceInitFileInGlobalDirectory(lldb::SBCommandReturnObject &result);
 
@@ -290,6 +304,38 @@ public:
   }
 };
 
+class SBCommandPluginInterfaceWithContext {
+public:
+  virtual ~SBCommandPluginInterfaceWithContext() = default;
+
+  virtual bool DoExecute(lldb::SBDebugger /*debugger*/, char ** /*command*/,
+                         lldb::SBExecutionContext /*exe_ctx*/,
+                         lldb::SBCommandReturnObject & /*result*/) {
+    return false;
+  }
+};
+
+class SBCommandPluginInterfaceWithoutContext
+  : public SBCommandPluginInterfaceWithContext {
+public:
+  explicit SBCommandPluginInterfaceWithoutContext(
+      SBCommandPluginInterface *orig_command) : m_orig_command(orig_command) {
+  }
+
+  ~SBCommandPluginInterfaceWithoutContext() override {
+    delete m_orig_command;
+  }
+
+  bool DoExecute(lldb::SBDebugger debugger, char **command,
+      lldb::SBExecutionContext /*exe_ctx*/,
+      lldb::SBCommandReturnObject &result) override {
+    return m_orig_command->DoExecute(debugger, command, result);
+  }
+
+private:
+  SBCommandPluginInterface *m_orig_command;
+};
+
 class SBCommand {
 public:
   SBCommand();
@@ -334,6 +380,10 @@ public:
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
   lldb::SBCommand AddCommand(const char *name,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
+                             const char *help = nullptr);
+
+  lldb::SBCommand AddCommand(const char *name,
                              lldb::SBCommandPluginInterface *impl,
                              const char *help = nullptr);
 
@@ -360,6 +410,10 @@ public:
   ///
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
+  lldb::SBCommand AddCommand(const char *name,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
+                             const char *help, const char *syntax);
+
   lldb::SBCommand AddCommand(const char *name,
                              lldb::SBCommandPluginInterface *impl,
                              const char *help, const char *syntax);
@@ -394,6 +448,11 @@ public:
   ///
   /// \return
   ///     A lldb::SBCommand representing the newly created command.
+  lldb::SBCommand AddCommand(const char *name,
+                             lldb::SBCommandPluginInterfaceWithContext *impl,
+                             const char *help, const char *syntax,
+                             const char *auto_repeat_command);
+
   lldb::SBCommand AddCommand(const char *name,
                              lldb::SBCommandPluginInterface *impl,
                              const char *help, const char *syntax,

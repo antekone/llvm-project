@@ -36,7 +36,7 @@ class CommandPluginInterfaceImplementation : public CommandObjectParsed {
 public:
   CommandPluginInterfaceImplementation(CommandInterpreter &interpreter,
                                        const char *name,
-                                       lldb::SBCommandPluginInterface *backend,
+                                       lldb::SBCommandPluginInterfaceWithContext *backend,
                                        const char *help = nullptr,
                                        const char *syntax = nullptr,
                                        uint32_t flags = 0,
@@ -68,11 +68,13 @@ protected:
     SBCommandReturnObject sb_return(result);
     SBCommandInterpreter sb_interpreter(&m_interpreter);
     SBDebugger debugger_sb(m_interpreter.GetDebugger().shared_from_this());
+    ExecutionContextRefSP exe_ctx_ref_sp(new ExecutionContextRef(m_exe_ctx));
     bool ret = m_backend->DoExecute(
-        debugger_sb, command.GetArgumentVector(), sb_return);
+        debugger_sb, command.GetArgumentVector(),
+        SBExecutionContext(exe_ctx_ref_sp), sb_return);
     return ret;
   }
-  std::shared_ptr<lldb::SBCommandPluginInterface> m_backend;
+  std::shared_ptr<lldb::SBCommandPluginInterfaceWithContext> m_backend;
   llvm::Optional<std::string> m_auto_repeat_command;
 };
 
@@ -546,24 +548,42 @@ lldb::SBCommand SBCommandInterpreter::AddMultiwordCommand(const char *name,
 }
 
 lldb::SBCommand SBCommandInterpreter::AddCommand(
-    const char *name, lldb::SBCommandPluginInterface *impl, const char *help) {
+    const char *name, lldb::SBCommandPluginInterfaceWithContext *impl,
+    const char *help) {
   LLDB_INSTRUMENT_VA(this, name, impl, help);
 
   return AddCommand(name, impl, help, /*syntax=*/nullptr,
                     /*auto_repeat_command=*/"");
 }
 
-lldb::SBCommand
-SBCommandInterpreter::AddCommand(const char *name,
-                                 lldb::SBCommandPluginInterface *impl,
-                                 const char *help, const char *syntax) {
+lldb::SBCommand SBCommandInterpreter::AddCommand(
+    const char *name, lldb::SBCommandPluginInterface *impl, const char *help) {
+  LLDB_INSTRUMENT_VA(this, name, impl, help);
+
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help, /*syntax=*/nullptr,
+      /*auto_repeat_command=*/"");
+}
+
+lldb::SBCommand SBCommandInterpreter::AddCommand(const char *name,
+    lldb::SBCommandPluginInterfaceWithContext *impl, const char *help,
+    const char *syntax) {
   LLDB_INSTRUMENT_VA(this, name, impl, help, syntax);
   return AddCommand(name, impl, help, syntax, /*auto_repeat_command=*/"");
 }
 
+lldb::SBCommand
+SBCommandInterpreter::AddCommand(const char *name,
+    lldb::SBCommandPluginInterface *impl,
+    const char *help, const char *syntax) {
+  LLDB_INSTRUMENT_VA(this, name, impl, help, syntax);
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help, syntax);
+}
+
 lldb::SBCommand SBCommandInterpreter::AddCommand(
-    const char *name, lldb::SBCommandPluginInterface *impl, const char *help,
-    const char *syntax, const char *auto_repeat_command) {
+    const char *name, lldb::SBCommandPluginInterfaceWithContext *impl,
+    const char *help, const char *syntax, const char *auto_repeat_command) {
   LLDB_INSTRUMENT_VA(this, name, impl, help, syntax, auto_repeat_command);
 
   lldb::CommandObjectSP new_command_sp;
@@ -575,6 +595,13 @@ lldb::SBCommand SBCommandInterpreter::AddCommand(
   if (add_error.Success())
     return lldb::SBCommand(new_command_sp);
   return lldb::SBCommand();
+}
+
+lldb::SBCommand SBCommandInterpreter::AddCommand(
+    const char *name, lldb::SBCommandPluginInterface *impl,
+    const char *help, const char *syntax, const char *auto_repeat_command) {
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help, syntax, auto_repeat_command);
 }
 
 SBCommand::SBCommand() { LLDB_INSTRUMENT_VA(this); }
@@ -643,7 +670,7 @@ lldb::SBCommand SBCommand::AddMultiwordCommand(const char *name,
 }
 
 lldb::SBCommand SBCommand::AddCommand(const char *name,
-                                      lldb::SBCommandPluginInterface *impl,
+                                      lldb::SBCommandPluginInterfaceWithContext *impl,
                                       const char *help) {
   LLDB_INSTRUMENT_VA(this, name, impl, help);
   return AddCommand(name, impl, help, /*syntax=*/nullptr,
@@ -652,6 +679,14 @@ lldb::SBCommand SBCommand::AddCommand(const char *name,
 
 lldb::SBCommand SBCommand::AddCommand(const char *name,
                                       lldb::SBCommandPluginInterface *impl,
+                                      const char *help) {
+  LLDB_INSTRUMENT_VA(this, name, impl, help);
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help);
+}
+
+lldb::SBCommand SBCommand::AddCommand(const char *name,
+                                      lldb::SBCommandPluginInterfaceWithContext *impl,
                                       const char *help, const char *syntax) {
   LLDB_INSTRUMENT_VA(this, name, impl, help, syntax);
   return AddCommand(name, impl, help, syntax, /*auto_repeat_command=*/"");
@@ -659,6 +694,14 @@ lldb::SBCommand SBCommand::AddCommand(const char *name,
 
 lldb::SBCommand SBCommand::AddCommand(const char *name,
                                       lldb::SBCommandPluginInterface *impl,
+                                      const char *help, const char *syntax) {
+  LLDB_INSTRUMENT_VA(this, name, impl, help, syntax);
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help, syntax);
+}
+
+lldb::SBCommand SBCommand::AddCommand(const char *name,
+                                      lldb::SBCommandPluginInterfaceWithContext *impl,
                                       const char *help, const char *syntax,
                                       const char *auto_repeat_command) {
   LLDB_INSTRUMENT_VA(this, name, impl, help, syntax, auto_repeat_command);
@@ -674,6 +717,15 @@ lldb::SBCommand SBCommand::AddCommand(const char *name,
   if (new_command_sp && m_opaque_sp->LoadSubCommand(name, new_command_sp))
     return lldb::SBCommand(new_command_sp);
   return lldb::SBCommand();
+}
+
+lldb::SBCommand SBCommand::AddCommand(const char *name,
+                                      lldb::SBCommandPluginInterface *impl,
+                                      const char *help, const char *syntax,
+                                      const char *auto_repeat_command) {
+  LLDB_INSTRUMENT_VA(this, name, impl, help, syntax, auto_repeat_command);
+  auto *impl_no_exe_ctx = new SBCommandPluginInterfaceWithoutContext(impl);
+  return AddCommand(name, impl_no_exe_ctx, help, syntax, auto_repeat_command);
 }
 
 uint32_t SBCommand::GetFlags() {
